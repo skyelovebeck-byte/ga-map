@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Georgia Child Health Policy — Member Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#1a1a1a}
+  #wrap{display:flex;height:100vh}
+  #map{flex:1}
+  #panel{width:380px;min-width:380px;overflow-y:auto;background:#fff;
+         border-left:1px solid #e0e0e0;padding:18px}
+  h1{font-size:17px;margin:0 0 4px}
+  .tagline{font-size:12px;color:#666;margin:0 0 14px}
+  #lookup{width:100%;padding:10px;font-size:15px;border:1px solid #ccc;border-radius:5px}
+  #go{margin-top:8px;width:100%;padding:9px;font-size:14px;background:#1d4e89;
+      color:#fff;border:0;border-radius:5px;cursor:pointer}
+  #go:hover{background:#163c6b}
+  .leg{border:1px solid #e8e8e8;border-radius:6px;padding:12px;margin:12px 0}
+  .leg h3{margin:0 0 2px;font-size:15px}
+  .meta{font-size:12px;color:#666;margin:0 0 8px}
+  .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;
+       border-radius:3px;background:#eee;margin-left:4px}
+  .D{background:#dbe9f6;color:#174a7c}.R{background:#f6dcdc;color:#8c2222}
+  .fed{background:#fff0d9;color:#8a5a00}
+  .bill{border-left:3px solid #ccc;padding:7px 9px;margin:6px 0;background:#fafafa;font-size:12px}
+  .yes{border-color:#1a7f37}.no{border-color:#c0392b}.na{border-color:#bbb}
+  .sect{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#777;
+        margin:14px 0 4px;border-bottom:1px solid #eee;padding-bottom:3px}
+  #status{position:absolute;bottom:12px;left:12px;z-index:1200;padding:7px 11px;
+          border-radius:5px;font-size:12px;max-width:440px;background:#e8f5e9;
+          border:1px solid #a5d6a7}
+  #status.warn{background:#fff3cd;border-color:#ffe08a}
+  .note{font-size:11px;color:#888;font-style:italic;margin-top:12px}
+  a{color:#1d4e89}
+  @media(max-width:760px){#wrap{flex-direction:column}#panel{width:100%;min-width:0}#map{height:55vh}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="map"></div>
+  <div id="panel">
+    <h1>Find Your Representative</h1>
+    <p class="tagline">Georgia General Assembly &amp; U.S. House · child health policy votes</p>
+    <input id="lookup" placeholder="Enter your 5-digit ZIP code" inputmode="numeric" maxlength="5">
+    <button id="go">Look up</button>
+    <div id="results"><p style="color:#666;margin-top:16px">
+      Click a circle on the map or enter your ZIP above.</p></div>
+  </div>
+</div>
+<div id="status">Loading roster…</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+// Free key: https://open.pluralpolicy.com/accounts/login/  (Open States v3)
+const OS_KEY = 'PASTE_YOUR_OPENSTATES_KEY_HERE';
+
+// Count sources, tried in order. Add a published Google Sheet CSV URL
+// as the first entry if you want staff to edit without GitHub.
+const SOURCES = ['data/members_by_zip.csv?'];
+
+/* ============================================================
+   ZIP REFERENCE — centroid + congressional district
+   lat, lon, area name, CD (estimate: verify before publishing)
+   ============================================================ */
+const Z = {
+"30002":[33.771,-84.265,"Avondale Estates",4],"30022":[34.027,-84.235,"Alpharetta",6],
+"30024":[34.060,-84.073,"Suwanee",7],"30028":[34.251,-84.192,"Cumming",7],
+"30030":[33.772,-84.297,"Decatur",5],"30039":[33.843,-84.004,"Snellville",4],
+"30043":[33.991,-84.004,"Lawrenceville",7],"30044":[33.924,-84.070,"Lawrenceville W",7],
+"30046":[33.932,-83.972,"Lawrenceville S",7],"30047":[33.873,-84.113,"Lilburn",4],
+"30052":[33.831,-83.901,"Loganville",10],"30060":[33.934,-84.551,"Marietta",11],
+"30062":[34.013,-84.470,"Marietta NE",11],"30064":[33.933,-84.620,"Marietta W",11],
+"30066":[34.031,-84.504,"Marietta N",11],"30067":[33.940,-84.468,"Marietta S",11],
+"30068":[33.962,-84.443,"Marietta E",11],"30075":[34.040,-84.364,"Roswell",6],
+"30076":[34.031,-84.322,"Roswell E",6],"30078":[33.862,-84.012,"Snellville N",4],
+"30080":[33.870,-84.520,"Smyrna",11],"30082":[33.861,-84.552,"Smyrna S",11],
+"30083":[33.793,-84.172,"Stone Mountain W",4],"30084":[33.853,-84.213,"Tucker",4],
+"30087":[33.812,-84.141,"Stone Mountain",4],"30092":[33.963,-84.233,"Peachtree Corners",7],
+"30093":[33.912,-84.182,"Norcross",7],"30094":[33.601,-84.003,"Conyers",4],
+"30097":[34.023,-84.142,"Duluth",7],"30101":[34.073,-84.703,"Acworth",11],
+"30115":[34.260,-84.443,"Canton",11],"30116":[33.561,-85.021,"Carrollton",3],
+"30125":[34.013,-85.252,"Cedartown",14],"30126":[33.812,-84.572,"Mableton",13],
+"30127":[33.863,-84.692,"Powder Springs",14],"30132":[34.013,-84.872,"Dallas N",14],
+"30143":[34.471,-84.424,"Jasper",11],"30144":[34.031,-84.581,"Kennesaw",11],
+"30152":[33.981,-84.661,"Kennesaw S",11],"30157":[33.901,-84.841,"Dallas",14],
+"30161":[34.252,-85.151,"Rome",14],"30183":[34.331,-84.551,"Waleska",11],
+"30188":[34.131,-84.473,"Woodstock",11],"30189":[34.111,-84.561,"Woodstock W",11],
+"30224":[33.241,-84.271,"Griffin",3],"30233":[33.303,-83.971,"Jackson",10],
+"30236":[33.521,-84.342,"Jonesboro",13],"30240":[33.031,-85.061,"LaGrange",3],
+"30252":[33.491,-84.081,"McDonough W",13],"30253":[33.451,-84.211,"McDonough",13],
+"30263":[33.371,-84.841,"Newnan",3],"30269":[33.401,-84.571,"Peachtree City",3],
+"30276":[33.291,-84.561,"Senoia",3],"30277":[33.331,-84.661,"Sharpsburg",3],
+"30303":[33.753,-84.390,"Atlanta Downtown",5],"30305":[33.833,-84.389,"Buckhead",6],
+"30306":[33.790,-84.350,"Virginia Highland",5],"30307":[33.771,-84.333,"Druid Hills",5],
+"30308":[33.771,-84.378,"Midtown E",5],"30309":[33.793,-84.389,"Midtown",5],
+"30310":[33.723,-84.422,"Atlanta SW",13],"30312":[33.743,-84.372,"Grant Park",5],
+"30316":[33.723,-84.332,"East Atlanta",5],"30317":[33.753,-84.311,"Kirkwood",5],
+"30318":[33.793,-84.442,"Atlanta W",5],"30319":[33.872,-84.333,"Brookhaven",6],
+"30322":[33.793,-84.323,"Emory",5],"30324":[33.821,-84.352,"Morningside",5],
+"30327":[33.862,-84.422,"Buckhead W",6],"30328":[33.932,-84.382,"Sandy Springs",6],
+"30329":[33.831,-84.321,"N. Druid Hills",5],"30333":[33.793,-84.323,"CDC",5],
+"30338":[33.942,-84.322,"Dunwoody",6],"30340":[33.901,-84.252,"Doraville",4],
+"30341":[33.892,-84.291,"Chamblee",4],"30342":[33.881,-84.372,"Sandy Springs S",6],
+"30345":[33.851,-84.281,"Northlake",4],"30346":[33.922,-84.341,"Dunwoody C",6],
+"30350":[34.001,-84.331,"Sandy Springs N",6],"30501":[34.311,-83.821,"Gainesville",9],
+"30518":[34.111,-84.001,"Buford",7],"30519":[34.071,-83.971,"Buford S",10],
+"30527":[34.471,-83.771,"Clermont",9],"30529":[34.211,-83.471,"Commerce",10],
+"30542":[34.191,-83.901,"Flowery Branch",9],"30545":[34.721,-83.731,"Helen",9],
+"30548":[34.091,-83.771,"Hoschton",9],"30549":[34.111,-83.601,"Jefferson",10],
+"30568":[34.951,-83.401,"Rabun Gap",9],"30622":[33.931,-83.531,"Bogart",10],
+"30650":[33.591,-83.461,"Madison",10],"30720":[34.781,-84.991,"Dalton",14],
+"30809":[33.551,-82.141,"Evans",10],"30904":[33.471,-82.031,"Augusta",12],
+"30907":[33.521,-82.091,"Martinez",10],"31029":[33.051,-83.931,"Forsyth",8],
+"31032":[33.001,-83.531,"Gray",8],"31069":[32.461,-83.731,"Perry",8],
+"31088":[32.571,-83.651,"Warner Robins",8],"31326":[32.291,-81.241,"Rincon",1],
+"31410":[32.031,-80.991,"Savannah",1],"31513":[31.781,-82.351,"Baxley",1],
+"31522":[31.181,-81.381,"St. Simons",1],"31632":[30.991,-83.371,"Hahira",8],
+"31705":[31.551,-84.061,"Albany",2],"31768":[31.171,-83.791,"Moultrie",2],
+"31794":[31.451,-83.511,"Tifton",8],"31807":[32.651,-84.801,"Ellerslie",3],
+"31811":[32.751,-84.871,"Hamilton",3],"31909":[32.551,-84.921,"Columbus",2]
+};
+
+/* U.S. House — 119th Congress. VERIFY against house.gov before publishing. */
+const US_HOUSE = {
+1:["Buddy Carter","R"],2:["Sanford Bishop","D"],3:["Brian Jack","R"],
+4:["Hank Johnson","D"],5:["Nikema Williams","D"],6:["Lucy McBath","D"],
+7:["Rich McCormick","R"],8:["Austin Scott","R"],9:["Andrew Clyde","R"],
+10:["Mike Collins","R"],11:["Barry Loudermilk","R"],12:["Rick Allen","R"],
+13:["David Scott","D"],14:["Marjorie Taylor Greene","R"]
+};
+
+/* ============================================================
+   MAP
+   ============================================================ */
+const map = L.map('map').setView([32.9,-83.4], 7);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18}).addTo(map);
+
+const bubbles = L.layerGroup().addTo(map);
+let members = {}, meta = {}, bills = [];
+
+const rad = n => Math.max(7, 5 + Math.sqrt(n) * 5);
+const col = n => n >= 5 ? '#08519c' : n >= 3 ? '#3182bd' : n >= 2 ? '#6baed6' : '#bdd7e7';
+
+function setStatus(msg, warn){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = warn ? 'warn' : '';
+}
+
+/* ---- CSV parsing ---- */
+function parseCSV(t){
+  const rows = [[]]; let f = '', q = false;
+  for(let i = 0; i < t.length; i++){
+    const c = t[i];
+    if(q){
+      if(c === '"' && t[i+1] === '"'){ f += '"'; i++; }
+      else if(c === '"') q = false;
+      else f += c;
+    }
+    else if(c === '"') q = true;
+    else if(c === ','){ rows[rows.length-1].push(f); f = ''; }
+    else if(c === '\n'){ rows[rows.length-1].push(f); f = ''; rows.push([]); }
+    else if(c !== '\r') f += c;
+  }
+  rows[rows.length-1].push(f);
+  return rows.filter(r => r.some(c => c.trim()));
+}
+
+async function loadMembers(){
+  for(const src of SOURCES){
+    try {
+      const res = await fetch(src + '&t=' + Date.now());
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = parseCSV(await res.text());
+      const head = rows.shift().map(h => h.trim().toLowerCase());
+      const iZ = head.indexOf('zip'), iM = head.indexOf('members'), iA = head.indexOf('area');
+      if(iZ < 0 || iM < 0) throw new Error('CSV needs "zip" and "members" columns');
+
+      members = {}; meta = {};
+      let skipped = 0, nogeo = 0;
+      rows.forEach(r => {
+        const z = (r[iZ] || '').trim().padStart(5,'0');
+        const n = parseInt((r[iM] || '').trim(), 10);
+        if(!/^\d{5}$/.test(z) || !n){ if((r[iZ]||'').trim()) skipped++; return; }
+        members[z] = (members[z] || 0) + n;
+        meta[z] = { area: iA >= 0 ? (r[iA] || '').trim() : '' };
+        if(!Z[z]) nogeo++;
+      });
+
+      const total = Object.values(members).reduce((a,b) => a+b, 0);
+      setStatus(`${total} members · ${Object.keys(members).length} ZIPs · updated `
+        + new Date().toLocaleTimeString()
+        + (skipped ? ` · ${skipped} row(s) skipped` : '')
+        + (nogeo ? ` · ${nogeo} ZIP(s) not mapped` : ''), nogeo > 0);
+      draw();
+      return;
+    } catch(e){ console.warn('Source failed:', src, e.message); }
+  }
+  setStatus('Could not load roster CSV. Check data/members_by_zip.csv exists.', true);
+}
+
+function draw(){
+  bubbles.clearLayers();
+  Object.entries(members).forEach(([z,n]) => {
+    const g = Z[z];
+    if(!g) return;
+    const area = (meta[z] && meta[z].area) || g[2];
+    L.circleMarker([g[0], g[1]], {
+      radius: rad(n), fillColor: col(n), color:'#fff', weight:1.5, fillOpacity:.85
+    })
+    .bindTooltip(`<b>${z}</b> — ${area}<br>${n} member${n>1?'s':''} · CD ${g[3]}`)
+    .on('click', () => lookup(z))
+    .addTo(bubbles);
+  });
+}
+
+/* ---- Bills ---- */
+async function loadBills(){
+  try {
+    const r = await fetch('data/tracked_bills.json?t=' + Date.now());
+    if(r.ok) bills = await r.json();
+  } catch(e){ console.warn('No bill file:', e.message); }
+}
+
+function billBlock(name, chamber){
+  const list = bills.filter(b => b.chamber === chamber);
+  if(!list.length) return '<p style="font-size:12px;color:#999">No tracked bills yet.</p>';
+  const last = name.split(' ').pop();
+  return list.map(b => {
+    const v = (b.votes && (b.votes[last] || b.votes[name])) || null;
+    const cls = v === 'yes' ? 'yes' : v === 'no' ? 'no' : 'na';
+    return `<div class="bill ${cls}">
+      <b>${b.bill}</b> — ${b.title}<br>
+      <span style="color:#666">${b.status}</span>
+      ${b.position ? ` · <i>Our position: ${b.position}</i>` : ''}<br>
+      Vote: <b>${v ? v.toUpperCase() : 'not recorded'}</b>
+      ${b.url ? ` · <a href="${b.url}" target="_blank" rel="noopener">bill text</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ---- Lookup ---- */
+async function lookup(zip){
+  const out = document.getElementById('results');
+  const g = Z[zip];
+  const n = members[zip] || 0;
+  const area = (meta[zip] && meta[zip].area) || (g ? g[2] : '');
+
+  out.innerHTML = `<div class="sect">ZIP ${zip}${area ? ' · ' + area : ''}</div>
+    <p style="font-size:13px;margin:4px 0 0">${n} member${n===1?'':'s'} in our roster</p>
+    <p style="color:#666;font-size:13px">Loading representatives…</p>`;
+
+  let html = `<div class="sect">ZIP ${zip}${area ? ' · ' + area : ''}</div>
+    <p style="font-size:13px;margin:4px 0 12px">${n} member${n===1?'':'s'} in our roster</p>`;
+
+  /* U.S. House — embedded table */
+  if(g && US_HOUSE[g[3]]){
+    const [nm, pty] = US_HOUSE[g[3]];
+    html += `<div class="sect">U.S. House</div>
+      <div class="leg">
+        <h3>${nm}<span class="tag ${pty}">${pty}</span><span class="tag fed">CD ${g[3]}</span></h3>
+        <p class="meta">Georgia's ${g[3]}${g[3]===1?'st':g[3]===2?'nd':g[3]===3?'rd':'th'} Congressional District</p>
+        ${billBlock(nm, 'federal')}
+      </div>`;
+  }
+
+  /* State legislators — live Open States lookup */
+  html += '<div class="sect">Georgia General Assembly</div>';
+  if(!g){
+    html += '<p style="font-size:12px;color:#999">ZIP not in coordinate table.</p>';
+  } else if(OS_KEY.startsWith('PASTE')){
+    html += '<p style="font-size:12px;color:#c0392b">Open States API key not set — '
+          + 'add it at the top of index.html to enable live legislator lookup.</p>';
+  } else {
+    try {
+      const res = await fetch(`https://v3.openstates.org/people.geo?lat=${g[0]}&lng=${g[1]}`
+        + `&apikey=${OS_KEY}`);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if(!data.results.length) html += '<p style="font-size:12px;color:#999">No match returned.</p>';
+      data.results.forEach(p => {
+        const ch = p.current_role.org_classification === 'upper' ? 'Senate' : 'House';
+        const pty = (p.party || '').charAt(0);
+        html += `<div class="leg">
+          <h3>${p.name}<span class="tag ${pty}">${pty}</span></h3>
+          <p class="meta">State ${ch} · District ${p.current_role.district}
+            ${p.email ? ' · <a href="mailto:' + p.email + '">' + p.email + '</a>' : ''}</p>
+          ${billBlock(p.name, 'state')}
+        </div>`;
+      });
+    } catch(e){
+      html += `<p style="font-size:12px;color:#c0392b">Legislator lookup failed: ${e.message}</p>`;
+    }
+  }
+
+  html += '<p class="note">District assignments are based on ZIP centroids. '
+        + 'ZIP codes often span multiple districts — enter a full address on the '
+        + 'Georgia General Assembly site to confirm.</p>';
+  out.innerHTML = html;
+}
+
+document.getElementById('go').onclick = () => {
+  const v = document.getElementById('lookup').value.trim();
+  if(/^\d{5}$/.test(v)) lookup(v);
+  else setStatus('Enter a valid 5-digit ZIP code.', true);
+};
+document.getElementById('lookup').addEventListener('keydown', e => {
+  if(e.key === 'Enter') document.getElementById('go').click();
+});
+
+loadBills().then(loadMembers);
+setInterval(loadMembers, 10 * 60 * 1000);
+</script>
+</body>
+</html>
