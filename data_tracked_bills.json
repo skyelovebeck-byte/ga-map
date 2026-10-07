@@ -1,0 +1,24 @@
+[
+  {
+    "bill": "HB 1013",
+    "chamber": "state",
+    "session": "2022",
+    "title": "Mental Health Parity Act",
+    "status": "Signed by Governor",
+    "position": "Support",
+    "summary": "Requires insurers to cover mental health at parity with physical health; expands workforce programs.",
+    "url": "https://www.legis.ga.gov/legislation/61365",
+    "votes": {}
+  },
+  {
+    "bill": "SB 106",
+    "chamber": "state",
+    "session": "2023",
+    "title": "Postpartum Medicaid Extension",
+    "status": "Signed by Governor",
+    "position": "Support",
+    "summary": "Extends Medicaid postpartum coverage to 12 months.",
+    "url": "https://www.legis.ga.gov/legislation",
+    "votes": {}
+  }
+]
