@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Georgia Member Distribution — Child Health Policy</title>
+<style>
+  @page{size:letter landscape;margin:.35in}
+  body{font:11px/1.4 "Helvetica Neue",Arial,sans-serif;margin:16px;color:#222}
+  h1{font-size:16px;margin:0 0 2px}
+  .sub{color:#666;font-size:10px;margin-bottom:8px}
+  .page{page-break-after:always}
+  .page:last-child{page-break-after:auto}
+  .row{display:flex;gap:14px;align-items:flex-start}
+  .mapbox{flex:0 0 55%}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#444;
+     border-bottom:1px solid #ddd;padding-bottom:3px;margin:0 0 6px}
+  svg{width:100%;height:auto;display:block}
+  .county{fill:#f2f4f6;stroke:#c8cdd3;stroke-width:.5}
+  .mk-dot{fill:#1d4e89;fill-opacity:.78;stroke:#fff;stroke-width:.7}
+  .mk-sq{fill:#c2571a;fill-opacity:.82;stroke:#fff;stroke-width:.7}
+  table{width:100%;border-collapse:collapse;font-size:9px}
+  th{text-align:left;background:#eef1f4;padding:3px 4px;border-bottom:1px solid #ccc}
+  td{padding:2px 4px;border-bottom:1px solid #f0f0f0}
+  td.n{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .legend{margin-top:6px;font-size:9px;color:#555}
+  .key{display:inline-block;width:9px;height:9px;margin-right:3px;vertical-align:-1px}
+  .note{margin-top:8px;font-size:8px;color:#888;font-style:italic}
+  #banner{background:#fff3cd;border:1px solid #ffe08a;padding:9px;font-size:11px;
+          margin-bottom:10px;display:none}
+  @media print{#banner{display:none!important}}
+</style>
+</head>
+<body>
+<div id="banner"></div>
+
+<div class="page">
+  <h1>Member Distribution — Statewide Concentration</h1>
+  <div class="sub"><span id="s1"></span> · Counties shown unlabeled · <span class="ts"></span></div>
+  <div class="row">
+    <div class="mapbox">
+      <h2>Member Locations by ZIP Code</h2>
+      <svg id="svg1" viewBox="0 0 560 680"></svg>
+      <div class="legend">
+        <span class="key mk-dot" style="border-radius:50%"></span>Member concentration (area &prop; count)
+        · <span class="key" style="background:#f2f4f6;border:1px solid #c8cdd3"></span>County
+      </div>
+    </div>
+    <div style="flex:1">
+      <h2>Top ZIP Concentrations</h2>
+      <table><thead><tr><th>ZIP</th><th>Area</th><th class="n">Mbrs</th></tr></thead>
+      <tbody id="t1"></tbody></table>
+      <p class="note">State House district counts require a spatial join against 2023
+      boundaries; ZIPs split across districts cannot be hand-assigned reliably.
+      Table shows verified ZIP-level counts.</p>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+  <h1>Member Distribution by U.S. Congressional District</h1>
+  <div class="sub">Same member set, federal overlay · <span class="ts"></span></div>
+  <div class="row">
+    <div class="mapbox">
+      <h2>U.S. Congressional Districts (2023 Map)</h2>
+      <svg id="svg2" viewBox="0 0 560 680"></svg>
+      <div class="legend"><span class="key mk-sq"></span>Member concentration (area &prop; count)</div>
+    </div>
+    <div style="flex:1">
+      <h2>Members by Congressional District</h2>
+      <table><thead><tr><th>CD</th><th>Representative</th><th class="n">Mbrs</th></tr></thead>
+      <tbody id="t2"></tbody></table>
+      <p class="note">Computed from ZIP-centroid assignment. Verify Columbia County
+      (30809/30907) and Cobb-area ZIPs against current boundaries before external
+      distribution.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script>
+document.querySelectorAll('.ts').forEach(e => e.textContent =
+  new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
+
+const Z = {
+"30002":[33.771,-84.265,"Avondale Estates",4],"30022":[34.027,-84.235,"Alpharetta",6],
+"30024":[34.060,-84.073,"Suwanee",7],"30028":[34.251,-84.192,"Cumming",7],
+"30030":[33.772,-84.297,"Decatur",5],"30039":[33.843,-84.004,"Snellville",4],
+"30043":[33.991,-84.004,"Lawrenceville",7],"30044":[33.924,-84.070,"Lawrenceville W",7],
+"30046":[33.932,-83.972,"Lawrenceville S",7],"30047":[33.873,-84.113,"Lilburn",4],
+"30052":[33.831,-83.901,"Loganville",10],"30060":[33.934,-84.551,"Marietta",11],
+"30062":[34.013,-84.470,"Marietta NE",11],"30064":[33.933,-84.620,"Marietta W",11],
+"30066":[34.031,-84.504,"Marietta N",11],"30067":[33.940,-84.468,"Marietta S",11],
+"30068":[33.962,-84.443,"Marietta E",11],"30075":[34.040,-84.364,"Roswell",6],
+"30076":[34.031,-84.322,"Roswell E",6],"30078":[33.862,-84.012,"Snellville N",4],
+"30080":[33.870,-84.520,"Smyrna",11],"30082":[33.861,-84.552,"Smyrna S",11],
+"30083":[33.793,-84.172,"Stone Mountain W",4],"30084":[33.853,-84.213,"Tucker",4],
+"30087":[33.812,-84.141,"Stone Mountain",4],"30092":[33.963,-84.233,"Peachtree Corners",7],
+"30093":[33.912,-84.182,"Norcross",7],"30094":[33.601,-84.003,"Conyers",4],
+"30097":[34.023,-84.142,"Duluth",7],"30101":[34.073,-84.703,"Acworth",11],
+"30115":[34.260,-84.443,"Canton",11],"30116":[33.561,-85.021,"Carrollton",3],
+"30125":[34.013,-85.252,"Cedartown",14],"30126":[33.812,-84.572,"Mableton",13],
+"30127":[33.863,-84.692,"Powder Springs",14],"30132":[34.013,-84.872,"Dallas N",14],
+"30143":[34.471,-84.424,"Jasper",11],"30144":[34.031,-84.581,"Kennesaw",11],
+"30152":[33.981,-84.661,"Kennesaw S",11],"30157":[33.901,-84.841,"Dallas",14],
+"30161":[34.252,-85.151,"Rome",14],"30183":[34.331,-84.551,"Waleska",11],
+"30188":[34.131,-84.473,"Woodstock",11],"30189":[34.111,-84.561,"Woodstock W",11],
+"30224":[33.241,-84.271,"Griffin",3],"30233":[33.303,-83.971,"Jackson",10],
+"30236":[33.521,-84.342,"Jonesboro",13],"30240":[33.031,-85.061,"LaGrange",3],
+"30252":[33.491,-84.081,"McDonough W",13],"30253":[33.451,-84.211,"McDonough",13],
+"30263":[33.371,-84.841,"Newnan",3],"30269":[33.401,-84.571,"Peachtree City",3],
+"30276":[33.291,-84.561,"Senoia",3],"30277":[33.331,-84.661,"Sharpsburg",3],
+"30303":[33.753,-84.390,"Atlanta Downtown",5],"30305":[33.833,-84.389,"Buckhead",6],
+"30306":[33.790,-84.350,"Virginia Highland",5],"30307":[33.771,-84.333,"Druid Hills",5],
+"30308":[33.771,-84.378,"Midtown E",5],"30309":[33.793,-84.389,"Midtown",5],
+"30310":[33.723,-84.422,"Atlanta SW",13],"30312":[33.743,-84.372,"Grant Park",5],
+"30316":[33.723,-84.332,"East Atlanta",5],"30317":[33.753,-84.311,"Kirkwood",5],
+"30318":[33.793,-84.442,"Atlanta W",5],"30319":[33.872,-84.333,"Brookhaven",6],
+"30322":[33.793,-84.323,"Emory",5],"30324":[33.821,-84.352,"Morningside",5],
+"30327":[33.862,-84.422,"Buckhead W",6],"30328":[33.932,-84.382,"Sandy Springs",6],
+"30329":[33.831,-84.321,"N. Druid Hills",5],"30333":[33.793,-84.323,"CDC",5],
+"30338":[33.942,-84.322,"Dunwoody",6],"30340":[33.901,-84.252,"Doraville",4],
+"30341":[33.892,-84.291,"Chamblee",4],"30342":[33.881,-84.372,"Sandy Springs S",6],
+"30345":[33.851,-84.281,"Northlake",4],"30346":[33.922,-84.341,"Dunwoody C",6],
+"30350":[34.001,-84.331,"Sandy Springs N",6],"30501":[34.311,-83.821,"Gainesville",9],
+"30518":[34.111,-84.001,"Buford",7],"30519":[34.071,-83.971,"Buford S",10],
+"30527":[34.471,-83.771,"Clermont",9],"30529":[34.211,-83.471,"Commerce",10],
+"30542":[34.191,-83.901,"Flowery Branch",9],"30545":[34.721,-83.731,"Helen",9],
+"30548":[34.091,-83.771,"Hoschton",9],"30549":[34.111,-83.601,"Jefferson",10],
+"30568":[34.951,-83.401,"Rabun Gap",9],"30622":[33.931,-83.531,"Bogart",10],
+"30650":[33.591,-83.461,"Madison",10],"30720":[34.781,-84.991,"Dalton",14],
+"30809":[33.551,-82.141,"Evans",10],"30904":[33.471,-82.031,"Augusta",12],
+"30907":[33.521,-82.091,"Martinez",10],"31029":[33.051,-83.931,"Forsyth",8],
+"31032":[33.001,-83.531,"Gray",8],"31069":[32.461,-83.731,"Perry",8],
+"31088":[32.571,-83.651,"Warner Robins",8],"31326":[32.291,-81.241,"Rincon",1],
+"31410":[32.031,-80.991,"Savannah",1],"31513":[31.781,-82.351,"Baxley",1],
+"31522":[31.181,-81.381,"St. Simons",1],"31632":[30.991,-83.371,"Hahira",8],
+"31705":[31.551,-84.061,"Albany",2],"31768":[31.171,-83.791,"Moultrie",2],
+"31794":[31.451,-83.511,"Tifton",8],"31807":[32.651,-84.801,"Ellerslie",3],
+"31811":[32.751,-84.871,"Hamilton",3],"31909":[32.551,-84.921,"Columbus",2]
+};
+
+const REP = {1:"Buddy Carter (R)",2:"Sanford Bishop (D)",3:"Brian Jack (R)",
+4:"Hank Johnson (D)",5:"Nikema Williams (D)",6:"Lucy McBath (D)",
+7:"Rich McCormick (R)",8:"Austin Scott (R)",9:"Andrew Clyde (R)",
+10:"Mike Collins (R)",11:"Barry Loudermilk (R)",12:"Rick Allen (R)",
+13:"David Scott (D)",14:"Marjorie Taylor Greene (R)"};
+
+/* fallback if CSV unreachable (file:// double-click) */
+const FALLBACK = {"30809":7,"30342":6,"30307":5,"30329":5,"30030":5,"30338":5,
+"30075":4,"30319":4,"30064":4,"30345":4,"30316":4,"30022":3,"31410":3,"30052":3,
+"30028":3,"31029":3,"30097":3,"30062":3,"31032":3,"30080":3,"30043":3,"30047":3,
+"30328":3,"30263":3,"30039":2,"30548":2,"30318":2,"30152":2,"30068":2,"30907":2,
+"30024":2,"31794":2,"30189":2,"30312":2,"30306":2,"30327":2,"30350":2,"30305":2,
+"30066":2,"30224":2,"30518":2,"30252":2,"30341":2,"30115":2,"30046":2,"30087":1,
+"30269":1,"30125":1,"31705":1,"30622":1,"30002":1,"30324":1,"31909":1,"30501":1,
+"30127":1,"30060":1,"30144":1,"30044":1,"30240":1,"30720":1,"31768":1,"30116":1,
+"30092":1,"30310":1,"30161":1,"30143":1,"31807":1,"30309":1,"30277":1,"30157":1,
+"30904":1,"30529":1,"30519":1,"30322":1,"30078":1,"31522":1,"30101":1,"30568":1,
+"31069":1,"30542":1,"31632":1,"30650":1,"30093":1,"31811":1,"30076":1,"30308":1,
+"30333":1,"30094":1,"30188":1,"30549":1,"30545":1,"30082":1,"30132":1,"30276":1,
+"30303":1,"30346":1,"30126":1,"30083":1,"30233":1,"30084":1,"31088":1,"30317":1,
+"31326":1,"30253":1,"31513":1,"30236":1,"30067":1,"30527":1,"30183":1,"30340":1};
+
+let M = {};
+const rad = n => Math.sqrt(n) * 3.0;
+
+function parseCSV(t){
+  const rows=[[]]; let f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){ if(c==='"'&&t[i+1]==='"'){f+='"';i++;} else if(c==='"')q=false; else f+=c; }
+    else if(c==='"')q=true;
+    else if(c===','){rows[rows.length-1].push(f);f='';}
+    else if(c==='\n'){rows[rows.length-1].push(f);f='';rows.push([]);}
+    else if(c!=='\r')f+=c;}
+  rows[rows.length-1].push(f);
+  return rows.filter(r=>r.some(c=>c.trim()));
+}
+
+function tables(){
+  const rows = Object.entries(M).map(([z,n]) => ({z, a: Z[z] ? Z[z][2] : '—', n}))
+    .sort((a,b) => b.n - a.n || a.z.localeCompare(b.z)).slice(0, 44);
+  const t1 = d3.select('#t1').selectAll('tr').data(rows).join('tr');
+  t1.append('td').text(d => d.z);
+  t1.append('td').text(d => d.a);
+  t1.append('td').attr('class','n').text(d => d.n);
+
+  const cd = {};
+  Object.entries(M).forEach(([z,n]) => { if(Z[z]) cd[Z[z][3]] = (cd[Z[z][3]]||0) + n; });
+  const crows = Object.entries(cd).map(([d,n]) => ({d:+d, n})).sort((a,b) => b.n - a.n);
+  const t2 = d3.select('#t2').selectAll('tr').data(crows).join('tr');
+  t2.append('td').text(d => 'CD ' + d.d);
+  t2.append('td').text(d => REP[d.d] || '—');
+  t2.append('td').attr('class','n').text(d => d.n);
+
+  const total = Object.values(M).reduce((a,b) => a+b, 0);
+  document.getElementById('s1').textContent =
+    `${total} Georgia members · ${Object.keys(M).length} ZIP codes`;
+}
+
+function render(counties){
+  [['#svg1','dot'],['#svg2','sq']].forEach(([id, shape]) => {
+    const svg = d3.select(id);
+    svg.selectAll('g').remove();
+    const proj = d3.geoAlbers().rotate([84,0]).fitExtent([[12,12],[548,668]], counties);
+    svg.append('g').selectAll('path').data(counties.features)
+       .join('path').attr('class','county').attr('d', d3.geoPath(proj));
+    const g = svg.append('g');
+    Object.entries(M).forEach(([z,n]) => {
+      if(!Z[z]) return;
+      const p = proj([Z[z][1], Z[z][0]]);
+      if(!p) return;
+      if(shape === 'dot')
+        g.append('circle').attr('class','mk-dot')
+         .attr('cx',p[0]).attr('cy',p[1]).attr('r',rad(n));
+      else {
+        const s = rad(n) * 1.78;
+        g.append('rect').attr('class','mk-sq')
+         .attr('x',p[0]-s/2).attr('y',p[1]-s/2).attr('width',s).attr('height',s);
+      }
+    });
+  });
+}
+
+function banner(msg){
+  const b = document.getElementById('banner');
+  b.style.display = 'block';
+  b.innerHTML = msg;
+}
+
+async function loadCounts(){
+  try {
+    const r = await fetch('data/members_by_zip.csv?t=' + Date.now());
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = parseCSV(await r.text());
+    const head = rows.shift().map(h => h.trim().toLowerCase());
+    const iZ = head.indexOf('zip'), iM = head.indexOf('members');
+    M = {};
+    rows.forEach(x => {
+      const z = (x[iZ]||'').trim().padStart(5,'0');
+      const n = parseInt((x[iM]||'').trim(), 10);
+      if(/^\d{5}$/.test(z) && n) M[z] = (M[z]||0) + n;
+    });
+  } catch(e){
+    M = FALLBACK;
+    banner('<b>Using built-in snapshot.</b> Live CSV unavailable ('
+      + e.message + '). This is expected when opening the file directly '
+      + 'instead of through GitHub Pages. Maps and tables below are complete.');
+  }
+  tables();
+  try {
+    const us = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json')
+      .then(r => r.json());
+    const fc = topojson.feature(us, us.objects.counties);
+    fc.features = fc.features.filter(f => String(f.id).padStart(5,'0').startsWith('13'));
+    render(fc);
+  } catch(e){
+    banner('<b>County shapes could not load</b> (no internet or CDN blocked). '
+      + 'Tables are complete and printable.');
+  }
+}
+loadCounts();
+</script>
+</body>
+</html>
